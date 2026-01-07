@@ -1,0 +1,20 @@
+{
+    "name": "cronify",
+    "version": "1.0.0",
+    "description": "Cronify - Automated Task Scheduler",
+    "main": "index.js",
+    "scripts": {
+        "start": "node index.js",
+        "dev": "node index.js"
+    },
+    "dependencies": {
+        "cors": "^2.8.5",
+        "dotenv": "^16.3.1",
+        "express": "^4.18.2",
+        "firebase-admin": "^12.0.0",
+        "node-cron": "^3.0.3"
+    },
+    "engines": {
+        "node": ">=18.0.0"
+    }
+}

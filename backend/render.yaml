@@ -1,0 +1,23 @@
+# Render deployment configuration
+# This file helps with Render deployment
+
+services:
+  - type: web
+    name: firebase-task-scheduler
+    env: node
+    region: oregon
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: FIREBASE_DATABASE_URL
+        sync: false
+      - key: FIREBASE_SERVICE_ACCOUNT
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+      - key: TIMEZONE
+        value: UTC

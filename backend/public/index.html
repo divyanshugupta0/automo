@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Cronify - Automated Task Scheduler with Firebase">
+    <title>Cronify | Automated Task Scheduler</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+
+<body>
+    <!-- Auth Screen -->
+    <div class="auth-container" id="auth-container">
+        <div class="auth-bg"></div>
+        <div class="auth-box">
+            <div class="auth-logo">⏰ Cronify</div>
+            <p class="auth-subtitle">Automated task scheduler that works while you sleep</p>
+
+            <div class="auth-tabs">
+                <button class="auth-tab active" data-tab="login">Login</button>
+                <button class="auth-tab" data-tab="signup">Sign Up</button>
+            </div>
+
+            <!-- Login Form -->
+            <form id="login-form" class="auth-form active">
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" id="login-email" placeholder="you@example.com" required>
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="login-password" placeholder="••••••••" required>
+                </div>
+                <button type="submit" class="btn btn-primary btn-full">Login</button>
+            </form>
+
+            <!-- Signup Form -->
+            <form id="signup-form" class="auth-form">
+                <div class="form-group">
+                    <label>Name</label>
+                    <input type="text" id="signup-name" placeholder="Your name" required>
+                </div>
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" id="signup-email" placeholder="you@example.com" required>
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="signup-password" placeholder="Min 6 characters" required minlength="6">
+                </div>
+                <div class="form-group">
+                    <label>Confirm Password</label>
+                    <input type="password" id="signup-confirm-password" placeholder="Re-enter password" required
+                        minlength="6">
+                </div>
+                <button type="submit" class="btn btn-primary btn-full">Create Account</button>
+            </form>
+
+            <div class="auth-divider"><span>or</span></div>
+
+            <button class="btn btn-google" id="google-signin-btn">
+                <svg viewBox="0 0 24 24" width="18" height="18">
+                    <path fill="#4285F4"
+                        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                    <path fill="#34A853"
+                        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                    <path fill="#FBBC05"
+                        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+                    <path fill="#EA4335"
+                        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+                </svg>
+                Continue with Google
+            </button>
+
+            <div class="auth-error" id="auth-error"></div>
+        </div>
+    </div>
+
+    <!-- Main App -->
+    <div class="app hidden" id="app">
+        <aside class="sidebar" id="sidebar">
+            <div class="logo">⏰ <span>Cronify</span></div>
+            <nav class="nav">
+                <a href="#" class="nav-item active" data-section="dashboard">📊 Dashboard</a>
+                <a href="#" class="nav-item" data-section="tasks">✅ Tasks</a>
+                <a href="#" class="nav-item" data-section="logs">📋 Logs</a>
+                <a href="#" class="nav-item" data-section="settings">⚙️ Settings</a>
+            </nav>
+            <div class="user-info" id="user-info">
+                <div class="user-avatar" id="user-avatar">U</div>
+                <div class="user-details">
+                    <span class="user-name" id="user-name">User</span>
+                    <button class="logout-btn" id="logout-btn">Logout</button>
+                </div>
+            </div>
+        </aside>
+
+        <main class="main">
+            <header class="header">
+                <button class="menu-btn" id="menu-btn">☰</button>
+                <h1 id="page-title">Dashboard</h1>
+                <div class="header-right">
+                    <div class="plan-info" id="plan-info" onclick="app.showUpgradeModal()">
+                        <span class="plan-badge free" id="plan-badge">🆓 Free</span>
+                        <span class="credits-display" id="credits-display">0 credits</span>
+                    </div>
+                    <button class="btn btn-primary" id="new-task-btn">+ New Task</button>
+                </div>
+            </header>
+
+            <!-- Dashboard -->
+            <section class="section active" id="dashboard-section">
+                <div class="stats">
+                    <div class="stat-card">
+                        <div class="stat-value" id="total-tasks">0</div>
+                        <div class="stat-label">Total Tasks</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="active-tasks">0</div>
+                        <div class="stat-label">Active</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="url-tasks">0</div>
+                        <div class="stat-label">URL Pings</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="firebase-tasks">0</div>
+                        <div class="stat-label">Firebase Tasks</div>
+                    </div>
+                </div>
+                <div class="card">
+                    <h2>🚀 Quick Start</h2>
+                    <div class="quick-start">
+                        <div class="qs-item">
+                            <div class="qs-icon">1</div>
+                            <div class="qs-text">
+                                <strong>Simple Cron</strong>
+                                <p>Ping a URL to keep your Render/Heroku app alive</p>
+                            </div>
+                        </div>
+                        <div class="qs-item">
+                            <div class="qs-icon">2</div>
+                            <div class="qs-text">
+                                <strong>Firebase Cron</strong>
+                                <p>Auto delete/backup/cleanup your Firebase data</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="card">
+                    <h2>📋 Recent Activity</h2>
+                    <div id="recent-activity" class="activity-list">
+                        <p class="empty">No recent activity</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Tasks -->
+            <section class="section" id="tasks-section">
+                <div class="toolbar">
+                    <input type="text" placeholder="Search tasks..." id="task-search" class="search-input">
+                    <div class="filters">
+                        <button class="filter-btn active" data-filter="all">All</button>
+                        <button class="filter-btn" data-filter="url">URL Ping</button>
+                        <button class="filter-btn" data-filter="firebase">Firebase</button>
+                    </div>
+                    <button class="btn btn-outline" id="refresh-tasks-btn" title="Refresh tasks">
+                        <i data-lucide="refresh-cw" class="icon-sm"></i>
+                    </button>
+                </div>
+                <div class="tasks-grid" id="tasks-grid">
+                    <p class="empty">No tasks yet. Create one!</p>
+                </div>
+            </section>
+
+            <!-- Logs -->
+            <section class="section" id="logs-section">
+                <div class="toolbar">
+                    <input type="text" placeholder="Search logs..." id="log-search" class="search-input">
+                    <button class="btn btn-outline" id="clear-logs-btn">🗑️ Clear All</button>
+                </div>
+                <div class="logs-container">
+                    <table class="logs-table">
+                        <thead>
+                            <tr>
+                                <th>Status</th>
+                                <th>Task</th>
+                                <th>Type</th>
+                                <th>Result</th>
+                                <th>Time</th>
+                            </tr>
+                        </thead>
+                        <tbody id="logs-tbody">
+                            <tr>
+                                <td colspan="5" class="empty">No logs yet</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Settings -->
+            <section class="section" id="settings-section">
+                <div class="card">
+                    <h2>📅 Cron Expression Reference</h2>
+                    <code class="cron-format">* * * * * (min hour day month weekday)</code>
+                    <div class="cron-examples">
+                        <div><code>*/5 * * * *</code> Every 5 minutes</div>
+                        <div><code>0 * * * *</code> Every hour</div>
+                        <div><code>0 0 * * *</code> Daily at midnight</div>
+                        <div><code>0 0 * * 0</code> Every Sunday</div>
+                    </div>
+                </div>
+                <div class="card danger-zone">
+                    <h2>⚠️ Danger Zone</h2>
+                    <button class="btn btn-danger" id="delete-account-btn">Delete My Account</button>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- New Task Modal -->
+    <div class="modal-overlay" id="task-modal">
+        <div class="modal">
+            <div class="modal-header">
+                <h2 id="modal-title">New Task</h2>
+                <button class="close-btn" id="modal-close">×</button>
+            </div>
+            <form id="task-form">
+                <input type="hidden" id="task-id">
+
+                <!-- Task Type Selection -->
+                <div class="task-type-selector">
+                    <label class="type-option active" data-type="url">
+                        <div class="type-icon">🌐</div>
+                        <span>Simple Cron</span>
+                        <small>Ping URL to keep alive</small>
+                    </label>
+                    <label class="type-option" data-type="firebase">
+                        <div class="type-icon">🔥</div>
+                        <span>Firebase Cron</span>
+                        <small>Database operations</small>
+                    </label>
+                </div>
+                <input type="hidden" id="task-type" value="url">
+
+                <div class="form-group">
+                    <label>Task Name *</label>
+                    <input type="text" id="task-name" placeholder="e.g., Keep Render Alive" required>
+                </div>
+
+                <!-- URL Task Fields -->
+                <div id="url-fields">
+                    <div class="form-group">
+                        <label>URL to Ping *</label>
+                        <input type="url" id="task-url" placeholder="https://your-app.onrender.com">
+                        <small>We'll send a GET request to this URL on schedule</small>
+                    </div>
+                </div>
+
+                <!-- Firebase Task Fields -->
+                <div id="firebase-fields" style="display:none;">
+                    <div class="form-group">
+                        <label>Firebase Config (JSON) *</label>
+                        <textarea id="task-firebase-config" rows="4"
+                            placeholder='{"apiKey":"...","authDomain":"...","databaseURL":"...","projectId":"..."}'></textarea>
+                        <small>Copy from Firebase Console → Project Settings → Your apps → Config</small>
+                    </div>
+                    <div class="form-group">
+                        <label>Service Account JSON *</label>
+                        <textarea id="task-service-account" rows="4"
+                            placeholder='{"type":"service_account","project_id":"...","private_key":"..."}'></textarea>
+                        <small>Download from Firebase Console → Project Settings → Service Accounts</small>
+                    </div>
+                    <div class="form-group">
+                        <label>Action *</label>
+                        <select id="task-action">
+                            <option value="delete">Delete All Data at Path</option>
+                            <option value="delete_old">Delete Old Data (by timestamp)</option>
+                            <option value="backup">Backup Data</option>
+                            <option value="archive">Archive Data</option>
+                            <option value="cleanup_null">Cleanup Null Values</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Target Path *</label>
+                        <input type="text" id="task-target-path" placeholder="e.g., messages/old">
+                    </div>
+                    <div class="form-group" id="days-field" style="display:none;">
+                        <label>Delete older than (days)</label>
+                        <input type="number" id="task-days" value="30" min="1">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Schedule *</label>
+                    <select id="task-schedule" required>
+                        <option value="*/5 * * * *">Every 5 minutes</option>
+                        <option value="*/10 * * * *" selected>Every 10 minutes</option>
+                        <option value="*/15 * * * *">Every 15 minutes</option>
+                        <option value="*/30 * * * *">Every 30 minutes</option>
+                        <option value="0 * * * *">Every hour</option>
+                        <option value="0 */2 * * *">Every 2 hours</option>
+                        <option value="0 */6 * * *">Every 6 hours</option>
+                        <option value="0 */12 * * *">Every 12 hours</option>
+                        <option value="0 0 * * *">Daily at midnight</option>
+                        <option value="0 9 * * *">Daily at 9 AM</option>
+                        <option value="0 0 * * 0">Every Sunday</option>
+                        <option value="0 0 * * 1">Every Monday</option>
+                        <option value="0 0 1 * *">First day of month</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label class="checkbox">
+                        <input type="checkbox" id="task-enabled" checked>
+                        <span>Enable task immediately</span>
+                    </label>
+                </div>
+            </form>
+            <div class="modal-footer">
+                <button class="btn btn-outline" id="modal-cancel">Cancel</button>
+                <button class="btn btn-primary" id="modal-save">Create Task</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Upgrade Modal -->
+    <div class="modal-overlay" id="upgrade-modal">
+        <div class="modal upgrade-modal">
+            <div class="modal-header">
+                <h2>⭐ Upgrade to Premium</h2>
+                <button class="close-btn"
+                    onclick="document.getElementById('upgrade-modal').classList.remove('active')">×</button>
+            </div>
+            <div class="upgrade-content">
+                <div class="upgrade-info">
+                    <p>You have <strong id="current-task-count">5</strong>/5 free tasks.</p>
+                    <p>Upgrade to create unlimited tasks!</p>
+                </div>
+
+                <div class="pricing-cards">
+                    <div class="pricing-card free">
+                        <h3>Free Plan</h3>
+                        <div class="price">₹0</div>
+                        <ul>
+                            <li><i data-lucide="check" class="icon-sm"></i> 5 Tasks Max</li>
+                            <li><i data-lucide="check" class="icon-sm"></i> Unlimited Runs</li>
+                            <li><i data-lucide="check" class="icon-sm"></i> URL & Firebase</li>
+                        </ul>
+                        <div class="current-plan">Current Plan</div>
+                    </div>
+                    <div class="pricing-card premium">
+                        <div class="popular-badge">Popular</div>
+                        <h3>Premium</h3>
+                        <div class="price">₹20 <span>/ 2000 credits</span></div>
+                        <ul>
+                            <li><i data-lucide="check" class="icon-sm"></i> Unlimited Tasks</li>
+                            <li><i data-lucide="check" class="icon-sm"></i> 2000 Runs per ₹20</li>
+                            <li><i data-lucide="check" class="icon-sm"></i> Priority Support</li>
+                        </ul>
+                        <button class="btn btn-primary btn-full" onclick="app.buyCredits()">
+                            <i data-lucide="zap" class="icon-sm"></i> Buy Credits
+                        </button>
+                    </div>
+                </div>
+
+                <p class="upgrade-note">First 5 tasks always free with unlimited runs!</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast-container" id="toasts"></div>
+
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
+    <script src="app.js"></script>
+</body>
+
+</html>

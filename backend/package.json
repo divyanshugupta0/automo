@@ -1,6 +1,7 @@
 {
     "name": "joblix",
     "version": "1.0.0",
+    "license": "MIT",
     "description": "joblix - Automated Task Scheduler",
     "main": "index.js",
     "scripts": {

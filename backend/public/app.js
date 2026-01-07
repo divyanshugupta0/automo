@@ -1,10 +1,10 @@
 // Automo - Automated Task Scheduler
 const FIREBASE_CONFIG = {
     apiKey: "AIzaSyBqD1J3iduH0QFAtE9utQBNc3ukRFwQz1M",
-    authDomain: "Automo-4dcee.firebaseapp.com",
-    databaseURL: "https://Automo-4dcee-default-rtdb.firebaseio.com",
-    projectId: "Automo-4dcee",
-    storageBucket: "Automo-4dcee.firebasestorage.app",
+    authDomain: "cronify-4dcee.firebaseapp.com",
+    databaseURL: "https://cronify-4dcee-default-rtdb.firebaseio.com",
+    projectId: "cronify-4dcee",
+    storageBucket: "cronify-4dcee.firebasestorage.app",
     messagingSenderId: "941814451722",
     appId: "1:941814451722:web:8a4acb3b4fc6275dd159f3",
     measurementId: "G-PPN8THV747"

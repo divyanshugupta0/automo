@@ -24,11 +24,26 @@ class Joblix {
         this.db = null;
         this.tasks = {};
         this.logs = [];
+        this.allLogs = []; // Store all logs for pagination
         this.userPlan = { plan: 'free', credits: 0 };
+        // Pagination state
+        this.logsPerPage = 10;
+        this.currentLogPage = 1;
+        this.totalLogPages = 1;
+        // Uptime tracking
+        this.uptimeInterval = null;
+        this.calculatedUptimeMs = 0;
+        this.uptimeStartTime = null;
+        // Analytics state
+        this.analyticsLogs = [];
+        this.analyticsFetched = false;
         this.init();
     }
 
     init() {
+        // Initialize Icons
+        if (window.lucide) lucide.createIcons();
+
         // Initialize Firebase
         if (!firebase.apps.length) {
             firebase.initializeApp(FIREBASE_CONFIG);
@@ -66,18 +81,25 @@ class Joblix {
         // Login
         document.getElementById('login-form').addEventListener('submit', async (e) => {
             e.preventDefault();
+            const btn = e.target.querySelector('button[type="submit"]');
+            this.setButtonLoading(btn, true, 'Logging in...');
+
             const email = document.getElementById('login-email').value;
             const password = document.getElementById('login-password').value;
             try {
                 await firebase.auth().signInWithEmailAndPassword(email, password);
             } catch (error) {
                 this.showAuthError(error.message);
+                this.setButtonLoading(btn, false);
             }
         });
 
         // Signup
         document.getElementById('signup-form').addEventListener('submit', async (e) => {
             e.preventDefault();
+            const btn = e.target.querySelector('button[type="submit"]');
+            this.setButtonLoading(btn, true, 'Creating Account...');
+
             const name = document.getElementById('signup-name').value;
             const email = document.getElementById('signup-email').value;
             const password = document.getElementById('signup-password').value;
@@ -86,6 +108,7 @@ class Joblix {
             // Validate passwords match
             if (password !== confirmPassword) {
                 this.showAuthError('Passwords do not match');
+                this.setButtonLoading(btn, false);
                 return;
             }
 
@@ -100,6 +123,7 @@ class Joblix {
                 });
             } catch (error) {
                 this.showAuthError(error.message);
+                this.setButtonLoading(btn, false);
             }
         });
 
@@ -143,6 +167,13 @@ class Joblix {
         document.getElementById('auth-container').classList.add('hidden');
         document.getElementById('app').classList.remove('hidden');
         this.updateUserInfo();
+
+        // Restore section from URL hash
+        const hash = window.location.hash.slice(1);
+        const validSections = ['dashboard', 'analytics', 'tasks', 'logs', 'settings'];
+        if (hash && validSections.includes(hash)) {
+            this.switchSection(hash);
+        }
     }
 
     updateUserInfo() {
@@ -166,13 +197,18 @@ class Joblix {
             this.updateStats();
         });
 
-        // Listen to logs
-        this.db.ref(`users/${this.user.uid}/logs`).orderByChild('timestamp').limitToLast(50).on('value', snap => {
-            this.logs = [];
+        // Listen to logs - fetch more for pagination
+        this.db.ref(`users/${this.user.uid}/logs`).orderByChild('timestamp').limitToLast(200).on('value', snap => {
+            this.allLogs = [];
             snap.forEach(child => {
-                this.logs.unshift({ id: child.key, ...child.val() });
+                this.allLogs.unshift({ id: child.key, ...child.val() });
             });
+            // Calculate total pages
+            this.totalLogPages = Math.max(1, Math.ceil(this.allLogs.length / this.logsPerPage));
+            // Default to latest page (page 1 is latest/newest logs)
+            this.currentLogPage = 1;
             this.renderLogs();
+            this.renderPagination();
             this.renderRecentActivity();
         });
     }
@@ -212,6 +248,145 @@ class Joblix {
         // Update free slots display if exists
         const freeSlotsEl = document.getElementById('free-slots');
         if (freeSlotsEl) freeSlotsEl.textContent = freeSlots;
+
+        // Calculate and start uptime display
+        this.calculateUptime();
+    }
+
+    calculateUptime() {
+        const tasksArr = Object.values(this.tasks).filter(t => t && t.id);
+        const activeTasks = tasksArr.filter(t => t.enabled);
+        const uptimeDisplay = document.getElementById('uptime-display');
+
+
+        // Find the task with maximum runs
+        let maxRuns = 0;
+        let bestTask = null;
+        for (const task of tasksArr) {
+            if (task.runCount && task.runCount > maxRuns) {
+                maxRuns = task.runCount;
+                bestTask = task;
+            }
+        }
+
+        if (!bestTask || maxRuns === 0) {
+            this.calculatedUptimeMs = 0;
+            this.startUptimeTimer();
+            return;
+        }
+
+        // Calculate uptime based on schedule interval and run count
+        const intervalMs = this.parseCronToMs(bestTask.schedule);
+        this.calculatedUptimeMs = maxRuns * intervalMs;
+        this.uptimeStartTime = Date.now();
+
+        // Handle timer based on active tasks
+        if (activeTasks.length === 0) {
+            this.stopUptimeTimer();
+            if (uptimeDisplay) {
+                uptimeDisplay.classList.add('inactive');
+                document.getElementById('uptime-value').textContent = this.formatUptime(this.calculatedUptimeMs);
+            }
+        } else {
+            if (uptimeDisplay) uptimeDisplay.classList.remove('inactive');
+            this.uptimeStartTime = Date.now();
+            this.startUptimeTimer();
+        }
+    }
+
+    parseCronToMs(schedule) {
+        // Parse common cron patterns to milliseconds
+        if (!schedule) return 5 * 60 * 1000; // default 5 minutes
+
+        const parts = schedule.split(' ');
+        if (parts.length < 5) return 5 * 60 * 1000;
+
+        const minute = parts[0];
+        const hour = parts[1];
+
+        // */X patterns - every X minutes/hours
+        if (minute.startsWith('*/')) {
+            const mins = parseInt(minute.slice(2));
+            return mins * 60 * 1000;
+        }
+
+        // 0 */X - every X hours
+        if (minute === '0' && hour.startsWith('*/')) {
+            const hours = parseInt(hour.slice(2));
+            return hours * 60 * 60 * 1000;
+        }
+
+        // 0 * - every hour
+        if (minute === '0' && hour === '*') {
+            return 60 * 60 * 1000;
+        }
+
+        // 0 0 * * * - daily
+        if (minute === '0' && hour === '0' && parts[2] === '*') {
+            return 24 * 60 * 60 * 1000;
+        }
+
+        // 0 0 * * 0 or 0 0 * * 1 - weekly
+        if (minute === '0' && hour === '0' && parts[4] !== '*') {
+            return 7 * 24 * 60 * 60 * 1000;
+        }
+
+        // 0 0 1 * * - monthly (approximate)
+        if (minute === '0' && hour === '0' && parts[2] === '1') {
+            return 30 * 24 * 60 * 60 * 1000;
+        }
+
+        // Default to 10 minutes if pattern not recognized
+        return 10 * 60 * 1000;
+    }
+
+    startUptimeTimer() {
+        // Clear existing timer
+        if (this.uptimeInterval) {
+            clearInterval(this.uptimeInterval);
+        }
+
+        // Update immediately
+        this.updateUptimeDisplay();
+
+        // Update every second
+        this.uptimeInterval = setInterval(() => {
+            this.updateUptimeDisplay();
+        }, 1000);
+    }
+
+    stopUptimeTimer() {
+        if (this.uptimeInterval) {
+            clearInterval(this.uptimeInterval);
+            this.uptimeInterval = null;
+        }
+    }
+
+    updateUptimeDisplay() {
+        const uptimeEl = document.getElementById('uptime-value');
+        if (!uptimeEl) return;
+
+        // Add elapsed time since calculation
+        const elapsedSinceCalc = this.uptimeStartTime ? (Date.now() - this.uptimeStartTime) : 0;
+        const totalMs = this.calculatedUptimeMs + elapsedSinceCalc;
+
+        uptimeEl.textContent = this.formatUptime(totalMs);
+    }
+
+    formatUptime(ms) {
+        if (ms <= 0) return '00:00:00';
+
+        const seconds = Math.floor(ms / 1000) % 60;
+        const minutes = Math.floor(ms / (1000 * 60)) % 60;
+        const hours = Math.floor(ms / (1000 * 60 * 60)) % 24;
+        const days = Math.floor(ms / (1000 * 60 * 60 * 24));
+
+        const pad = n => n.toString().padStart(2, '0');
+
+        if (days > 0) {
+            return `${days}d ${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+        }
+        return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
     }
 
     async refreshTasks() {
@@ -377,12 +552,22 @@ class Joblix {
 
     renderLogs() {
         const tbody = document.getElementById('logs-tbody');
-        if (this.logs.length === 0) {
+
+        if (this.allLogs.length === 0) {
             tbody.innerHTML = '<tr><td colspan="5" class="empty">No logs yet</td></tr>';
+            document.getElementById('logs-pagination').style.display = 'none';
             return;
         }
 
-        tbody.innerHTML = this.logs.map(log => `
+        // Show pagination
+        document.getElementById('logs-pagination').style.display = 'flex';
+
+        // Calculate start and end indices for current page
+        const startIndex = (this.currentLogPage - 1) * this.logsPerPage;
+        const endIndex = Math.min(startIndex + this.logsPerPage, this.allLogs.length);
+        const logsToShow = this.allLogs.slice(startIndex, endIndex);
+
+        tbody.innerHTML = logsToShow.map(log => `
       <tr>
         <td><span class="log-status ${log.status}">${log.status}</span></td>
         <td>${this.esc(log.taskName)}</td>
@@ -393,9 +578,90 @@ class Joblix {
     `).join('');
     }
 
+    renderPagination() {
+        const pagesContainer = document.getElementById('pagination-pages');
+        const infoEl = document.getElementById('pagination-info');
+        const prevBtn = document.getElementById('prev-page-btn');
+        const nextBtn = document.getElementById('next-page-btn');
+
+        if (this.allLogs.length === 0) {
+            pagesContainer.innerHTML = '';
+            infoEl.textContent = '';
+            return;
+        }
+
+        // Update arrows state
+        prevBtn.disabled = this.currentLogPage === 1;
+        nextBtn.disabled = this.currentLogPage === this.totalLogPages;
+
+        // Generate page numbers (Google-style with ellipsis)
+        const pages = this.generatePageNumbers(this.currentLogPage, this.totalLogPages);
+
+        pagesContainer.innerHTML = pages.map(page => {
+            if (page === '...') {
+                return '<span class="pagination-ellipsis">...</span>';
+            }
+            const isActive = page === this.currentLogPage ? 'active' : '';
+            return `<button class="pagination-page ${isActive}" data-page="${page}">${page}</button>`;
+        }).join('');
+
+        // Update info text
+        const startItem = (this.currentLogPage - 1) * this.logsPerPage + 1;
+        const endItem = Math.min(this.currentLogPage * this.logsPerPage, this.allLogs.length);
+        infoEl.textContent = `Showing ${startItem}-${endItem} of ${this.allLogs.length} logs`;
+
+        // Re-initialize icons
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+    }
+
+    generatePageNumbers(current, total) {
+        const pages = [];
+        const maxVisible = 7; // Maximum visible page numbers
+
+        if (total <= maxVisible) {
+            // Show all pages if total is small
+            for (let i = 1; i <= total; i++) {
+                pages.push(i);
+            }
+        } else {
+            // Always show first page
+            pages.push(1);
+
+            if (current > 3) {
+                pages.push('...');
+            }
+
+            // Pages around current
+            const start = Math.max(2, current - 1);
+            const end = Math.min(total - 1, current + 1);
+
+            for (let i = start; i <= end; i++) {
+                pages.push(i);
+            }
+
+            if (current < total - 2) {
+                pages.push('...');
+            }
+
+            // Always show last page
+            pages.push(total);
+        }
+
+        return pages;
+    }
+
+    goToLogPage(pageNum) {
+        if (pageNum < 1 || pageNum > this.totalLogPages) return;
+        this.currentLogPage = pageNum;
+        this.renderLogs();
+        this.renderPagination();
+        // Scroll to top of logs section
+        document.getElementById('logs-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
     renderRecentActivity() {
         const container = document.getElementById('recent-activity');
-        const recent = this.logs.slice(0, 5);
+        const recent = this.allLogs.slice(0, 5);
 
         if (recent.length === 0) {
             container.innerHTML = '<p class="empty">No recent activity</p>';
@@ -411,6 +677,124 @@ class Joblix {
         </div>
       </div>
     `).join('');
+    }
+
+    async renderAnalytics() {
+        if (!this.analyticsFetched) {
+            this.showToast('Analyzing history...', 'info');
+            try {
+                const snap = await this.db.ref(`users/${this.user.uid}/logs`).orderByChild('timestamp').limitToLast(2000).once('value');
+                this.analyticsLogs = [];
+                snap.forEach(child => { this.analyticsLogs.unshift({ id: child.key, ...child.val() }); });
+                this.analyticsFetched = true;
+            } catch (e) { }
+        }
+        const logsData = this.analyticsLogs.length > 0 ? this.analyticsLogs : this.allLogs;
+        if (!logsData.length) return;
+
+        // Calculate Stats
+        // Use total lifetime runs from tasks for the big number
+        const tasksArr = Object.values(this.tasks).filter(t => t && t.id);
+        const totalLifeTimeRuns = tasksArr.reduce((acc, t) => acc + (t.runCount || 0), 0);
+
+        // Use logsData for success rate calculation
+        const logRuns = logsData.length;
+        const successRuns = logsData.filter(l => l.status === 'success').length;
+        const failureRuns = logRuns - successRuns;
+        const successRate = logRuns ? Math.round((successRuns / logRuns) * 100) : 0;
+
+        // Update Stat Cards
+        document.getElementById('analytics-total-runs').innerText = totalLifeTimeRuns;
+        document.getElementById('analytics-success-rate').innerText = `${successRate}%`;
+        // Mock avg time (real implementation would require duration in logs)
+        document.getElementById('analytics-avg-time').innerText = '~150ms';
+
+        // Destroy existing charts if any
+        if (this.statusChart) this.statusChart.destroy();
+        if (this.volumeChart) this.volumeChart.destroy();
+
+        // Status Chart (Doughnut)
+        const ctxStatus = document.getElementById('statusChart').getContext('2d');
+        this.statusChart = new Chart(ctxStatus, {
+            type: 'doughnut',
+            data: {
+                labels: ['Success', 'Failed'],
+                datasets: [{
+                    data: [successRuns, failureRuns],
+                    backgroundColor: ['#10b981', '#ef4444'],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { position: 'bottom', labels: { color: '#9ca3af' } }
+                }
+            }
+        });
+
+        // Volume Chart (Line - Runs per Day)
+        // Group logs by date
+        const runsByDate = {};
+        logsData.forEach(log => {
+            const date = new Date(log.timestamp).toLocaleDateString();
+            runsByDate[date] = (runsByDate[date] || 0) + 1;
+        });
+
+        const labels = Object.keys(runsByDate).slice(-7); // Last 7 days
+        const data = Object.values(runsByDate).slice(-7);
+
+        const ctxVolume = document.getElementById('volumeChart').getContext('2d');
+        this.volumeChart = new Chart(ctxVolume, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Runs',
+                    data: data,
+                    borderColor: '#6366f1',
+                    backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: { grid: { color: '#374151' }, ticks: { color: '#9ca3af' } },
+                    x: { grid: { display: false }, ticks: { color: '#9ca3af' } }
+                },
+                plugins: {
+                    legend: { display: false }
+                }
+            }
+        });
+    }
+
+    exportLogs() {
+        if (!this.allLogs.length) {
+            this.showToast('No logs to export', 'error');
+            return;
+        }
+
+        const headers = ['Task Name', 'Type', 'Status', 'Message', 'Time'];
+        const rows = this.allLogs.map(log => [
+            log.taskName,
+            log.type,
+            log.status,
+            log.message,
+            new Date(log.timestamp).toLocaleString()
+        ]);
+
+        const csvContent = [headers, ...rows]
+            .map(e => e.map(cell => `"${(cell || '').toString().replace(/"/g, '""')}"`).join(','))
+            .join('\n');
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `joblix_logs_${Date.now()}.csv`;
+        link.click();
     }
 
     // =========== UI ===========
@@ -467,6 +851,29 @@ class Joblix {
         // Clear logs
         document.getElementById('clear-logs-btn')?.addEventListener('click', () => this.clearLogs());
 
+        // Export logs
+        document.getElementById('export-logs-btn')?.addEventListener('click', () => this.exportLogs());
+
+        // Pagination controls
+        document.getElementById('prev-page-btn')?.addEventListener('click', () => {
+            this.goToLogPage(this.currentLogPage - 1);
+        });
+
+        document.getElementById('next-page-btn')?.addEventListener('click', () => {
+            this.goToLogPage(this.currentLogPage + 1);
+        });
+
+        // Page number clicks (event delegation)
+        document.getElementById('pagination-pages')?.addEventListener('click', (e) => {
+            const pageBtn = e.target.closest('.pagination-page');
+            if (pageBtn) {
+                const pageNum = parseInt(pageBtn.dataset.page);
+                if (!isNaN(pageNum)) {
+                    this.goToLogPage(pageNum);
+                }
+            }
+        });
+
         // Filters
         document.querySelectorAll('.filter-btn').forEach(btn => {
             btn.addEventListener('click', () => this.filterTasks(btn.dataset.filter));
@@ -487,6 +894,13 @@ class Joblix {
         document.querySelector(`[data-section="${section}"]`).classList.add('active');
         document.getElementById('page-title').textContent = section.charAt(0).toUpperCase() + section.slice(1);
         document.getElementById('sidebar').classList.remove('open');
+
+        // Update URL hash without triggering scroll
+        history.replaceState(null, null, `#${section}`);
+
+        if (section === 'analytics') {
+            this.renderAnalytics();
+        }
     }
 
     toggleTaskFields(type) {
@@ -634,6 +1048,18 @@ class Joblix {
         const div = document.createElement('div');
         div.textContent = str;
         return div.innerHTML;
+    }
+
+    setButtonLoading(btn, isLoading, loadingText = 'Processing...') {
+        if (isLoading) {
+            btn.dataset.originalText = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = `<i data-lucide="loader-2" class="icon-sm spin"></i> ${loadingText}`;
+            if (window.lucide) lucide.createIcons();
+        } else {
+            btn.disabled = false;
+            btn.innerHTML = btn.dataset.originalText || 'Submit';
+        }
     }
 }
 

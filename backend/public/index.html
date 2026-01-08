@@ -6,10 +6,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="Joblix - Automated Task Scheduler with Firebase">
     <title>Joblix | Automated Task Scheduler</title>
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236366f1' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polygon points='13 2 3 14 12 14 11 22 21 10 12 10 13 2'></polygon></svg>">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
     <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 
 <body>
@@ -17,7 +20,10 @@
     <div class="auth-container" id="auth-container">
         <div class="auth-bg"></div>
         <div class="auth-box">
-            <div class="auth-logo">⏰ Joblix</div>
+            <div class="auth-logo">
+                <i data-lucide="zap" style="width: 32px; height: 32px; color: var(--primary);"></i>
+                Joblix
+            </div>
             <p class="auth-subtitle">Automated task scheduler that works while you sleep</p>
 
             <div class="auth-tabs">
@@ -97,6 +103,9 @@
                 <a href="#" class="nav-item" data-section="logs">
                     <i data-lucide="file-text" class="icon-sm"></i> Logs
                 </a>
+                <a href="#" class="nav-item" data-section="analytics">
+                    <i data-lucide="bar-chart-2" class="icon-sm"></i> Analytics
+                </a>
                 <a href="#" class="nav-item" data-section="settings">
                     <i data-lucide="settings" class="icon-sm"></i> Settings
                 </a>
@@ -118,6 +127,10 @@
                     <div class="plan-info" id="plan-info" onclick="app.showUpgradeModal()">
                         <span class="plan-badge free" id="plan-badge">🆓 Free</span>
                         <span class="credits-display" id="credits-display">0 credits</span>
+                    </div>
+                    <div class="uptime-display" id="uptime-display" title="Total uptime based on task runs">
+                        <i data-lucide="activity" class="icon-sm"></i>
+                        <span id="uptime-value">--:--:--</span>
                     </div>
                     <button class="btn btn-primary" id="new-task-btn">+ New Task</button>
                 </div>
@@ -170,6 +183,35 @@
                 </div>
             </section>
 
+            <!-- Analytics -->
+            <section class="section" id="analytics-section">
+                <div class="stats">
+                    <div class="stat-card">
+                        <div class="stat-value" id="analytics-total-runs">0</div>
+                        <div class="stat-label">Total Runs</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value success-text" id="analytics-success-rate">0%</div>
+                        <div class="stat-label">Success Rate</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="analytics-avg-time">0ms</div>
+                        <div class="stat-label">Avg Duration</div>
+                    </div>
+                </div>
+
+                <div class="charts-grid">
+                    <div class="card chart-card">
+                        <h2>Performance Breakdown</h2>
+                        <canvas id="statusChart"></canvas>
+                    </div>
+                    <div class="card chart-card">
+                        <h2>Runs Over Time</h2>
+                        <canvas id="volumeChart"></canvas>
+                    </div>
+                </div>
+            </section>
+
             <!-- Tasks -->
             <section class="section" id="tasks-section">
                 <div class="toolbar">
@@ -192,6 +234,9 @@
             <section class="section" id="logs-section">
                 <div class="toolbar">
                     <input type="text" placeholder="Search logs..." id="log-search" class="search-input">
+                    <button class="btn btn-outline" id="export-logs-btn" title="Export to CSV">
+                        <i data-lucide="download" class="icon-sm"></i> Export
+                    </button>
                     <button class="btn btn-outline" id="clear-logs-btn">🗑️ Clear All</button>
                 </div>
                 <div class="logs-container">
@@ -211,6 +256,19 @@
                             </tr>
                         </tbody>
                     </table>
+                </div>
+                <!-- Pagination -->
+                <div class="pagination-container" id="logs-pagination">
+                    <button class="pagination-arrow" id="prev-page-btn" title="Previous Page">
+                        <i data-lucide="chevron-left" class="icon-sm"></i>
+                    </button>
+                    <div class="pagination-pages" id="pagination-pages">
+                        <!-- Page numbers will be dynamically inserted here -->
+                    </div>
+                    <button class="pagination-arrow" id="next-page-btn" title="Next Page">
+                        <i data-lucide="chevron-right" class="icon-sm"></i>
+                    </button>
+                    <span class="pagination-info" id="pagination-info"></span>
                 </div>
             </section>
 

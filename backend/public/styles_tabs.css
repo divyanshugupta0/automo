@@ -1,0 +1,67 @@
+/* Modal sizing for larger forms */
+.modal {
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+/* API Tabs */
+.api-tabs {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.api-tab {
+    padding: 0.5rem 1rem;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: all 0.2s;
+}
+
+.api-tab:hover {
+    background: var(--bg-hover);
+    color: var(--text);
+}
+
+.api-tab.active {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: white;
+}
+
+.api-code-container {
+    background: #000;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+}
+
+.code-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 1rem;
+    background: #1a1a1f;
+    border-bottom: 1px solid var(--border);
+}
+
+.code-header span {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    font-family: monospace;
+}
+
+.code-content {
+    padding: 1rem;
+    font-family: monospace;
+    font-size: 0.85rem;
+    color: #a8a8b3;
+    white-space: pre-wrap;
+    word-break: break-all;
+    max-height: 400px;
+    overflow-y: auto;
+}

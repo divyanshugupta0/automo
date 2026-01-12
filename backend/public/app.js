@@ -170,7 +170,7 @@ class Joblix {
 
         // Restore section from URL hash
         const hash = window.location.hash.slice(1);
-        const validSections = ['dashboard', 'analytics', 'tasks', 'logs', 'settings'];
+        const validSections = ['dashboard', 'analytics', 'tasks', 'logs', 'settings', 'encryption'];
         if (hash && validSections.includes(hash)) {
             this.switchSection(hash);
         }
@@ -188,6 +188,13 @@ class Joblix {
         this.db.ref(`users/${this.user.uid}/plan`).on('value', snap => {
             this.userPlan = snap.val() || { plan: 'free', credits: 0 };
             this.updatePlanDisplay();
+        });
+
+        // Listen to API Key
+        this.db.ref(`users/${this.user.uid}/apiKey`).on('value', snap => {
+            const key = snap.val();
+            const el = document.getElementById('api-key-display');
+            if (el) el.value = key || 'Not Generated';
         });
 
         // Listen to tasks
@@ -210,6 +217,20 @@ class Joblix {
             this.renderLogs();
             this.renderPagination();
             this.renderRecentActivity();
+        });
+
+        // Listen to stats (API Usage)
+        this.db.ref(`users/${this.user.uid}/stats`).on('value', snap => {
+            this.stats = snap.val() || {};
+            // Use the centralized update function
+            this.updateEncryptionStats();
+
+            // Also update analytics if visible
+            if (document.getElementById('analytics-section').classList.contains('active')) {
+                const reqs = this.stats.apiRequests || 0;
+                const el = document.getElementById('analytics-api-requests');
+                if (el) el.textContent = reqs;
+            }
         });
     }
 
@@ -511,15 +532,16 @@ class Joblix {
         }
 
         grid.innerHTML = tasksArr.map(task => {
-            const typeLabel = task.type === 'url' ? 'URL' : 'Firebase';
-            const typeIcon = task.type === 'url'
-                ? '<i data-lucide="globe" class="icon"></i>'
-                : '<i data-lucide="database" class="icon"></i>';
+            const typeLabel = task.type === 'url' ? 'URL' : (task.type === 'encryption_worker' ? 'Encryption' : 'Firebase');
+            let typeIcon = '<i data-lucide="database" class="icon"></i>';
+            if (task.type === 'url') typeIcon = '<i data-lucide="globe" class="icon"></i>';
+            if (task.type === 'encryption_worker') typeIcon = '<i data-lucide="lock" class="icon"></i>';
+
             const statusClass = task.enabled ? 'active' : 'paused';
             const statusText = task.enabled ? 'Active' : 'Paused';
-            const metaInfo = task.type === 'url'
-                ? (task.url || '').substring(0, 35) + '...'
-                : (task.targetPath || task.action || '');
+            let metaInfo = task.targetPath || task.action || '';
+            if (task.type === 'url') metaInfo = (task.url || '').substring(0, 35) + '...';
+            if (task.type === 'encryption_worker') metaInfo = 'Processing Queue';
             const schedule = task.schedule || '';
 
             return `
@@ -704,10 +726,23 @@ class Joblix {
         const successRate = logRuns ? Math.round((successRuns / logRuns) * 100) : 0;
 
         // Update Stat Cards
-        document.getElementById('analytics-total-runs').innerText = totalLifeTimeRuns;
-        document.getElementById('analytics-success-rate').innerText = `${successRate}%`;
-        // Mock avg time (real implementation would require duration in logs)
-        document.getElementById('analytics-avg-time').innerText = '~150ms';
+        document.getElementById('analytics-total-runs').textContent = totalLifeTimeRuns;
+        document.getElementById('analytics-success-rate').textContent = `${successRate.toFixed(1)}%`;
+        // Calculate Average Duration
+        const durationSum = logsData.reduce((acc, log) => acc + (log.duration || 0), 0);
+        const avgDuration = logRuns > 0 ? Math.round(durationSum / logRuns) : 0;
+        const durationText = avgDuration > 1000 ? `${(avgDuration / 1000).toFixed(2)}s` : `${avgDuration}ms`;
+
+        document.getElementById('analytics-avg-time').textContent = durationText;
+
+        // Fetch API Stats
+        try {
+            const statsSnap = await this.db.ref(`users/${this.user.uid}/stats`).once('value');
+            const stats = statsSnap.val() || {};
+            document.getElementById('analytics-api-requests').textContent = stats.apiRequests || 0;
+        } catch (e) {
+            console.error(e);
+        }
 
         // Destroy existing charts if any
         if (this.statusChart) this.statusChart.destroy();
@@ -800,6 +835,9 @@ class Joblix {
     // =========== UI ===========
     bindEvents() {
         this.bindAuthEvents();
+
+        // API Key Gen
+        document.getElementById('generate-key-btn')?.addEventListener('click', () => this.generateApiKey());
 
         // Navigation
         document.querySelectorAll('.nav-item').forEach(item => {
@@ -901,11 +939,308 @@ class Joblix {
         if (section === 'analytics') {
             this.renderAnalytics();
         }
+        if (section === 'encryption') {
+            this.updateApiBaseUrl();
+            this.switchApiTab('js'); // Default to JS
+            this.updateEncryptionStats();
+        }
+    }
+
+    updateEncryptionStats() {
+        // Use cached stats if available from listener, or fetch
+        const reqs = (this.stats && this.stats.apiRequests) ? this.stats.apiRequests : 0;
+        const credits = reqs * 1;
+
+        const reqEl = document.getElementById('enc-total-requests');
+        const credEl = document.getElementById('enc-credits-used');
+        const sitesEl = document.getElementById('enc-site-usage');
+
+        if (reqEl) reqEl.textContent = reqs;
+        if (credEl) credEl.textContent = credits;
+
+        // Render Sites
+        if (this.stats && this.stats.sites && sitesEl) {
+            const sites = this.stats.sites;
+            if (Object.keys(sites).length > 0) {
+                sitesEl.innerHTML = Object.entries(sites).map(([site, count]) => `
+                    <div style="display:flex; justify-content:space-between; margin-bottom:4px; border-bottom:1px solid #333; padding-bottom:2px;">
+                        <span>${this.esc(site.replace(/_/g, '.'))}</span>
+                        <strong>${count}</strong>
+                    </div>
+                `).join('');
+            } else {
+                sitesEl.innerHTML = 'No site data yet.';
+            }
+        }
+    }
+
+    updateApiBaseUrl() {
+        const baseUrl = window.location.origin;
+        document.getElementById('api-base-url').value = baseUrl;
+        return baseUrl;
+    }
+
+    switchApiTab(lang) {
+        document.querySelectorAll('.api-tab').forEach(b => b.classList.toggle('active', b.dataset.lang === lang));
+
+        const baseUrl = window.location.origin;
+        const apiKey = document.getElementById('api-key-display').value || 'YOUR_KEY';
+        const labelMap = {
+            'js': 'JavaScript (Node.js/Fetch)',
+            'python': 'Python (Requests)',
+            'php': 'PHP (cURL)',
+            'curl': 'cURL (Command Line)'
+        };
+
+        document.getElementById('code-lang-label').textContent = labelMap[lang];
+        document.getElementById('api-code-block').textContent = this.generateApiCode(lang, baseUrl, apiKey);
+    }
+
+    generateApiCode(lang, url, key) {
+        if (lang === 'js') {
+            return `// Joblix Configuration
+const joblixConfig = {
+    apiKey: '${key}',
+    authDomain: '${url}'
+};
+
+// Helper Function
+async function encryptData(text) {
+    const response = await fetch(\`\${joblixConfig.authDomain}/api/service/encrypt\`, {
+        method: 'POST',
+        headers: { 
+            'Content-Type': 'application/json', 
+            'x-api-key': joblixConfig.apiKey 
+        },
+        body: JSON.stringify({ text })
+    });
+    return await response.json();
+}
+
+// Usage
+encryptData('Sensitive Information').then(console.log);`;
+        }
+
+        if (lang === 'python') {
+            return `# Joblix Configuration
+joblix_config = {
+    "api_key": "${key}",
+    "auth_domain": "${url}"
+}
+
+import requests
+
+def encrypt_data(text):
+    headers = {
+        "x-api-key": joblix_config["api_key"],
+        "Content-Type": "application/json"
+    }
+    response = requests.post(
+        f"{joblix_config['auth_domain']}/api/service/encrypt",
+        json={"text": text},
+        headers=headers
+    )
+    return response.json()
+
+# Usage
+print(encrypt_data("Sensitive Information"))`;
+        }
+
+        if (lang === 'php') {
+            return `<?php
+// Joblix Configuration
+$joblixConfig = [
+    'apiKey' => '${key}',
+    'authDomain' => '${url}'
+];
+
+function encryptData($text, $config) {
+    $ch = curl_init($config['authDomain'] . '/api/service/encrypt');
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'Content-Type: application/json',
+        'x-api-key: ' . $config['apiKey']
+    ]);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode(['text' => $text]));
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    
+    $result = curl_exec($ch);
+    curl_close($ch);
+    return json_decode($result, true);
+}
+
+// Usage
+print_r(encryptData('Sensitive Information', $joblixConfig));
+?>`;
+        }
+
+        if (lang === 'curl') {
+            return `# Joblix Configuration
+API_KEY="${key}"
+BASE_URL="${url}"
+
+# Usage
+curl -X POST "$BASE_URL/api/service/encrypt" \\
+  -H "Content-Type: application/json" \\
+  -H "x-api-key: $API_KEY" \\
+  -d '{"text": "Sensitive Information"}'`;
+        }
+    }
+
+    copyToClipboard(elementId) {
+        const el = document.getElementById(elementId);
+        if (el) {
+            el.select();
+            document.execCommand('copy');
+            this.showToast('Copied to clipboard!', 'success');
+        }
+    }
+
+    copyCodeSnippet() {
+        const code = document.getElementById('api-code-block').textContent;
+        navigator.clipboard.writeText(code).then(() => {
+            this.showToast('Code copied!', 'success');
+        });
     }
 
     toggleTaskFields(type) {
-        document.getElementById('url-fields').style.display = type === 'url' ? 'block' : 'none';
+        document.getElementById('url-fields').style.display = type === 'firebase' ? 'none' : 'block';
         document.getElementById('firebase-fields').style.display = type === 'firebase' ? 'block' : 'none';
+
+        // Customize Label for Encryption Worker
+        // Customize Label for Encryption Worker
+        // Fix: Select relative to input because label might miss 'for' attribute
+        const urlInput = document.getElementById('task-url');
+        const urlLabel = urlInput.previousElementSibling;
+        const urlDesc = urlInput.nextElementSibling;
+
+        if (type === 'encryption_worker') {
+            urlLabel.textContent = 'Allowed Origin (Optional)';
+            document.getElementById('task-url').placeholder = 'https://myshop.com';
+            urlDesc.textContent = 'Restrict usage to this domain. Leave empty to allow all.';
+        } else {
+            urlLabel.textContent = 'URL to Ping *';
+            document.getElementById('task-url').placeholder = 'https://your-app.onrender.com';
+            urlDesc.textContent = "We'll send a GET request to this URL on schedule";
+        }
+
+        // Hide schedule for encryption worker (auto-managed)
+        const schedGroup = document.getElementById('task-schedule').closest('.form-group');
+        if (type === 'encryption_worker') {
+            schedGroup.style.display = 'none';
+            // Default to every minute for worker
+            document.getElementById('task-schedule').innerHTML = '<option value="* * * * *">Every Minute (Auto)</option>';
+        } else {
+            schedGroup.style.display = 'block';
+            // Restore options if switching back (simplified restore)
+            if (!document.getElementById('task-schedule').querySelector('option[value="*/5 * * * *"]')) {
+                document.getElementById('task-schedule').innerHTML = `
+                    <option value="*/5 * * * *">Every 5 minutes</option>
+                    <option value="*/10 * * * *" selected>Every 10 minutes</option>
+                    <option value="*/15 * * * *">Every 15 minutes</option>
+                    <option value="*/30 * * * *">Every 30 minutes</option>
+                    <option value="0 * * * *">Every hour</option>
+                    <option value="0 */2 * * *">Every 2 hours</option>
+                    <option value="0 */6 * * *">Every 6 hours</option>
+                    <option value="0 */12 * * *">Every 12 hours</option>
+                    <option value="0 0 * * *">Daily at midnight</option>
+                    <option value="0 9 * * *">Daily at 9 AM</option>
+                    <option value="0 0 * * 0">Every Sunday</option>
+                    <option value="0 0 * * 1">Every Monday</option>
+                    <option value="0 0 1 * *">First day of month</option>
+                `;
+            }
+        }
+    }
+
+    async generateApiKey() {
+        if (!confirm('Generate new API Key? Any existing key will stop working.')) return;
+        try {
+            const res = await fetch('/api/generate-key', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: this.user.uid })
+            });
+            const data = await res.json();
+            if (data.success) {
+                this.showToast('New API Key Generated', 'success');
+                // Refresh code view if on encryption tab
+                if (document.getElementById('encryption-section').classList.contains('active')) {
+                    this.switchApiTab(document.querySelector('.api-tab.active').dataset.lang);
+                }
+            } else {
+                this.showToast('Error: ' + data.error, 'error');
+            }
+        } catch (e) {
+            this.showToast('Error: ' + e.message, 'error');
+        }
+    }
+
+    async testEncryption(action) {
+        const text = document.getElementById('test-input').value;
+        const apiKey = document.getElementById('api-key-display').value;
+        const resultEl = document.getElementById('test-result');
+
+        if (!text) return this.showToast('Enter text to ' + action, 'error');
+        if (apiKey === 'Not Generated') return this.showToast('Generate an API Key first', 'error');
+
+        resultEl.innerHTML = `<span class="loading">Sending request...</span>`;
+
+        try {
+            // 1. Submit Request
+            const res = await fetch(`/api/service/${action}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-api-key': apiKey
+                },
+                body: JSON.stringify({ text })
+            });
+            const data = await res.json();
+
+            if (!data.success) {
+                resultEl.innerHTML = `<span class="error">Error: ${data.error}</span>`;
+                return;
+            }
+
+            // Check if processed immediately
+            if (data.status === 'completed') {
+                resultEl.innerHTML = `<strong>Result (Immediate):</strong><br>${this.esc(data.result)}`;
+                return;
+            }
+
+            resultEl.innerHTML = `Request Queued (ID: ${data.requestId}).<br>Waiting for worker...`;
+
+            // 2. Poll for result
+            const poll = setInterval(async () => {
+                try {
+                    const r = await fetch('/api/service/result', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey },
+                        body: JSON.stringify({ requestId: data.requestId })
+                    });
+                    const d = await r.json();
+
+                    if (d.success && d.status === 'completed') {
+                        clearInterval(poll);
+                        resultEl.innerHTML = `<strong>Result:</strong><br>${this.esc(d.result)}`;
+                    } else if (d.status === 'failed') {
+                        clearInterval(poll);
+                        resultEl.innerHTML = `<span class="error">Task Failed: ${d.error}</span>`;
+                    }
+                } catch (e) { }
+            }, 2000);
+
+            // Timeout after 30s
+            setTimeout(() => {
+                clearInterval(poll);
+                if (resultEl.innerHTML.includes('Waiting')) {
+                    resultEl.innerHTML += `<br><span class="warning">Timeout: check if your Encryption Worker is running!</span>`;
+                }
+            }, 30000);
+
+        } catch (e) {
+            resultEl.innerHTML = `<span class="error">Error: ${e.message}</span>`;
+        }
     }
 
     openTaskModal(task = null) {
@@ -966,6 +1301,8 @@ class Joblix {
                 this.showToast('Please enter a URL', 'error');
                 return;
             }
+        } else if (type === 'encryption_worker') {
+            // No extra config needed
         } else {
             taskData.firebaseConfig = document.getElementById('task-firebase-config').value;
             taskData.serviceAccount = document.getElementById('task-service-account').value;

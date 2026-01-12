@@ -11,6 +11,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles_tabs.css">
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
@@ -106,6 +107,9 @@
                 <a href="#" class="nav-item" data-section="analytics">
                     <i data-lucide="bar-chart-2" class="icon-sm"></i> Analytics
                 </a>
+                <a href="#" class="nav-item" data-section="encryption">
+                    <i data-lucide="lock" class="icon-sm"></i> Encryption
+                </a>
                 <a href="#" class="nav-item" data-section="settings">
                     <i data-lucide="settings" class="icon-sm"></i> Settings
                 </a>
@@ -173,6 +177,13 @@
                                 <p>Auto delete/backup/cleanup your Firebase data</p>
                             </div>
                         </div>
+                        <div class="qs-item">
+                            <div class="qs-icon">3</div>
+                            <div class="qs-text">
+                                <strong>Encryption Worker</strong>
+                                <p>Queue encryption/decryption tasks via API</p>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 <div class="card">
@@ -198,6 +209,10 @@
                         <div class="stat-value" id="analytics-avg-time">0ms</div>
                         <div class="stat-label">Avg Duration</div>
                     </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="analytics-api-requests">0</div>
+                        <div class="stat-label">API Requests</div>
+                    </div>
                 </div>
 
                 <div class="charts-grid">
@@ -212,6 +227,104 @@
                 </div>
             </section>
 
+            <!-- Encryption API -->
+            <section class="section" id="encryption-section">
+                <div class="card">
+                    <h2>🔑 API Configuration</h2>
+                    <div class="form-group">
+                        <label>Base URL</label>
+                        <div class="api-key-container">
+                            <input type="text" id="api-base-url" readonly value="" class="code-input">
+                            <button class="btn btn-outline" onclick="app.copyToClipboard('api-base-url')">
+                                <i data-lucide="copy" class="icon-sm"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Your API Key</label>
+                        <div class="api-key-container">
+                            <input type="text" id="api-key-display" readonly value="Not Generated" class="code-input">
+                            <button class="btn btn-outline" id="generate-key-btn" title="Generate New Key">
+                                <i data-lucide="refresh-cw" class="icon-sm"></i>
+                            </button>
+                            <button class="btn btn-outline" onclick="app.copyToClipboard('api-key-display')"
+                                title="Copy Key">
+                                <i data-lucide="copy" class="icon-sm"></i>
+                            </button>
+                        </div>
+                        <small>Use this key in the <code>x-api-key</code> header of your requests.</small>
+                    </div>
+                    <div class="form-group"
+                        style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border);">
+                        <label>📊 Usage Stats</label>
+                        <div style="display: flex; gap: 1rem; align-items: center;">
+                            <div
+                                style="flex: 1; background: var(--bg-dark); padding: 0.5rem; border-radius: var(--radius); text-align: center; border: 1px solid var(--border);">
+                                <div style="font-size: 0.75rem; color: var(--text-muted);">Total Requests</div>
+                                <div id="enc-total-requests"
+                                    style="font-size: 1.25rem; font-weight: 700; color: var(--primary);">0</div>
+                            </div>
+                            <div
+                                style="flex: 1; background: var(--bg-dark); padding: 0.5rem; border-radius: var(--radius); text-align: center; border: 1px solid var(--border);">
+                                <div style="font-size: 0.75rem; color: var(--text-muted);">Credits Used</div>
+                                <div id="enc-credits-used"
+                                    style="font-size: 1.25rem; font-weight: 700; color: var(--danger);">0</div>
+                            </div>
+                        </div>
+                        <div style="margin-top: 1rem;">
+                            <label>Client Sites (Origins)</label>
+                            <div id="enc-site-usage"
+                                style="background: var(--bg-dark); border: 1px solid var(--border); border-radius: var(--radius); padding: 0.5rem; font-size: 0.8rem; color: var(--text-muted);">
+                                No site data yet.
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <h2>📚 Integration Guide</h2>
+                        <div class="api-tabs">
+                            <button class="api-tab active" data-lang="js"
+                                onclick="app.switchApiTab('js')">Node/JS</button>
+                            <button class="api-tab" data-lang="python"
+                                onclick="app.switchApiTab('python')">Python</button>
+                            <button class="api-tab" data-lang="php" onclick="app.switchApiTab('php')">PHP</button>
+                            <button class="api-tab" data-lang="curl" onclick="app.switchApiTab('curl')">cURL</button>
+                        </div>
+
+                        <div class="api-code-container">
+                            <div class="code-header">
+                                <span id="code-lang-label">JavaScript (Fetch)</span>
+                                <button class="btn btn-sm btn-outline" onclick="app.copyCodeSnippet()">
+                                    <i data-lucide="copy" class="icon-sm"></i> Copy
+                                </button>
+                            </div>
+                            <pre id="api-code-block"
+                                class="code-content">// Select a language to see the integration code</pre>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <h2>🛠️ Encryption Tester</h2>
+                        <div class="test-console">
+                            <div class="form-group">
+                                <label>Input Text</label>
+                                <textarea id="test-input" rows="3"
+                                    placeholder="Enter text to encrypt or decrypt..."></textarea>
+                            </div>
+                            <div class="test-actions">
+                                <button class="btn btn-primary" onclick="app.testEncryption('encrypt')">Encrypt</button>
+                                <button class="btn btn-outline" onclick="app.testEncryption('decrypt')">Decrypt</button>
+                            </div>
+                            <div class="form-group" style="margin-top: 1rem;">
+                                <label>Result</label>
+                                <div id="test-result" class="code-block">Results will appear here...</div>
+                            </div>
+                            <small>Note: This sends a request to your queue. You must have an active <strong>Encryption
+                                    Worker</strong> task running to process it!</small>
+                        </div>
+                    </div>
+            </section>
+
             <!-- Tasks -->
             <section class="section" id="tasks-section">
                 <div class="toolbar">
@@ -220,6 +333,7 @@
                         <button class="filter-btn active" data-filter="all">All</button>
                         <button class="filter-btn" data-filter="url">URL Ping</button>
                         <button class="filter-btn" data-filter="firebase">Firebase</button>
+                        <button class="filter-btn" data-filter="encryption_worker">Enc Worker</button>
                     </div>
                     <button class="btn btn-outline" id="refresh-tasks-btn" title="Refresh tasks">
                         <i data-lucide="refresh-cw" class="icon-sm"></i>
@@ -313,6 +427,11 @@
                         <div class="type-icon">🔥</div>
                         <span>Firebase Cron</span>
                         <small>Database operations</small>
+                    </label>
+                    <label class="type-option" data-type="encryption_worker">
+                        <div class="type-icon">🔐</div>
+                        <span>Encryption Worker</span>
+                        <small>Process API queue</small>
                     </label>
                 </div>
                 <input type="hidden" id="task-type" value="url">

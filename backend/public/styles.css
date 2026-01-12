@@ -1353,3 +1353,102 @@ body {
 .spin {
     animation: spin 1s linear infinite;
 }
+
+/* API Key and Encryption Styles */
+.api-key-container {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.code-input {
+    font-family: monospace;
+    background: #000;
+    color: var(--success);
+    letter-spacing: 0.5px;
+}
+
+.test-console {
+    background: #0d0d12;
+    padding: 1rem;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+}
+
+.test-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+
+.code-block {
+    background: #000;
+    padding: 1rem;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    font-family: monospace;
+    font-size: 0.85rem;
+    color: #a8a8b3;
+    min-height: 60px;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+.code-block strong {
+    color: var(--text);
+}
+
+.code-block .error {
+    color: var(--danger);
+}
+
+.code-block .warning {
+    color: var(--warning);
+}
+
+.code-block .loading {
+    color: var(--primary);
+    animation: pulse 1.5s infinite;
+}
+
+.api-docs h3 {
+    margin-top: 1.5rem;
+    margin-bottom: 0.5rem;
+    font-size: 0.95rem;
+    color: var(--primary);
+}
+
+.api-docs pre {
+    background: #000;
+    padding: 1rem;
+    border-radius: var(--radius);
+    overflow-x: auto;
+    font-family: monospace;
+    font-size: 0.8rem;
+    color: #a8a8b3;
+    border: 1px solid var(--border);
+}
+
+.task-badge.encryption_worker {
+    background: rgba(168, 85, 247, 0.2);
+    color: #d8b4fe;
+}
+
+@keyframes pulse {
+    0% {
+        opacity: 0.5;
+    }
+
+    50% {
+        opacity: 1;
+    }
+
+    100% {
+        opacity: 0.5;
+    }
+}
+
+/* Modal sizing for larger forms */
+.modal {
+    max-height: 90vh;
+    overflow-y: auto;
+}
